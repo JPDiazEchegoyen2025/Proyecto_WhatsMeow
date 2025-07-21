@@ -1,36 +1,70 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import QRCode from 'react-qr-code';
 // QRLogin.jsx
-// Este componente consume el endpoint /login y muestra el QR
 
-// Polling automático para detectar sesión activa tras escanear el QR
 function QRLogin() {
+  // Estados principales de la vista
+  const [view, setView] = useState('loading'); // 'loading' | 'welcome' | 'qr' | 'session' | 'error'
   const [qr, setQr] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [qrTimer, setQrTimer] = useState(36);
+  const [sessionInfo, setSessionInfo] = useState(null);
   const [error, setError] = useState(null);
   const [logoutMsg, setLogoutMsg] = useState(null);
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [qrTimer, setQrTimer] = useState(36);
-  const [qrInterval, setQrInterval] = useState(null);
   const [attempts, setAttempts] = useState(0);
-  const [sessionInfo, setSessionInfo] = useState(null); // Nueva variable para la sesión
+  const qrIntervalRef = useRef(null);
+  const pollIntervalRef = useRef(null);
+
+  // Verificar sesión activa al cargar
+  useEffect(() => {
+    fetch('http://localhost:8080/session')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.active) {
+          setSessionInfo(data);
+          setView('session');
+        } else {
+          setSessionInfo(null);
+          setView('welcome');
+        }
+      })
+      .catch(() => {
+        setSessionInfo(null);
+        setView('welcome');
+      });
+  }, []);
 
   // Temporizador para el QR
   useEffect(() => {
-    if (qr) {
+    if (view === 'qr' && qr) {
       setQrTimer(36);
-      if (qrInterval) clearInterval(qrInterval);
+      if (qrIntervalRef.current) clearInterval(qrIntervalRef.current);
       const interval = setInterval(() => {
         setQrTimer((prev) => {
           if (prev <= 1) {
             clearInterval(interval);
             setQr(null);
             setError('El QR ha expirado.');
+            setView('error');
             return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      qrIntervalRef.current = interval;
+      return () => clearInterval(interval);
+    }
+    // Limpia el temporizador si no hay QR
+    if (view !== 'qr' && qrIntervalRef.current) {
+      clearInterval(qrIntervalRef.current);
+      qrIntervalRef.current = null;
+    }
+  }, [view, qr]);
+
+  // Polling para detectar sesión activa tras escanear el QR
   useEffect(() => {
-    let pollInterval = null;
-    if (qr && !sessionInfo) {
-      pollInterval = setInterval(() => {
+    if (view === 'qr' && qr && !sessionInfo) {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      const poll = setInterval(() => {
         fetch('http://localhost:8080/session')
           .then((res) => res.json())
           .then((data) => {
@@ -38,95 +72,31 @@ function QRLogin() {
               setSessionInfo(data);
               setQr(null);
               setError(null);
-              setLoading(false);
-              clearInterval(pollInterval);
+              setView('session');
+              clearInterval(poll);
             }
           })
           .catch(() => {});
-      }, 3000); // cada 3 segundos
+      }, 3000);
+      pollIntervalRef.current = poll;
+      return () => clearInterval(poll);
     }
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [qr, sessionInfo]);
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      setQrInterval(interval);
-      return () => clearInterval(interval);
+    if (view !== 'qr' && pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
     }
-    // Limpia el temporizador si no hay QR
-    if (!qr && qrInterval) {
-      clearInterval(qrInterval);
-      setQrInterval(null);
-    }
-  }, [qr]);
+  }, [view, qr, sessionInfo]);
 
-  // Verificar sesión activa al cargar el componente
-  useEffect(() => {
-    fetch('http://localhost:8080/session')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.active) {
-          setSessionInfo(data);
-          setShowWelcome(false);
-          setLoading(false);
-        } else {
-          setSessionInfo(null);
-          setShowWelcome(true);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        setSessionInfo(null);
-        setShowWelcome(true);
-        setLoading(false);
-      });
-  }, []);
-
-  const handleLogout = async () => {
-    setLogoutMsg(null);
-    try {
-      const res = await fetch('http://localhost:8080/logout', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        setLogoutMsg(data.message);
-        setQr(null);
-        setError(null);
-        setSessionInfo(null);
-        setShowWelcome(true);
-        setLoading(false);
-      } else {
-        setLogoutMsg(data.error || 'Error al cerrar sesión');
-      }
-    } catch (err) {
-      setLogoutMsg('Error de red al cerrar sesión');
-    }
-  };
-
-  // Función para volver a la pantalla de bienvenida y reiniciar estados
-  const handleBack = () => {
-    setShowWelcome(true);
-    setQr(null);
-    setError(null);
-    setLoading(false);
-    setLogoutMsg(null);
-  };
-
+  // Iniciar proceso de vinculación
   const handleStart = () => {
-    setShowWelcome(false);
-    setLoading(true);
-    // Antes de iniciar el proceso de vinculación, volver a consultar la sesión
+    setView('loading');
     fetch('http://localhost:8080/session')
       .then((res) => res.json())
       .then((data) => {
         if (data && data.active) {
           setSessionInfo(data);
-          setShowWelcome(false);
-          setLoading(false);
+          setView('session');
         } else {
-          // Si no hay sesión, iniciar vinculación
           fetch('http://localhost:8080/login')
             .then((response) => {
               if (!response.ok) {
@@ -137,23 +107,60 @@ function QRLogin() {
             })
             .then((data) => {
               setQr(data.qr);
-              setLoading(false);
               setAttempts(0);
+              setView('qr');
             })
             .catch((err) => {
               setError(err.message);
-              setLoading(false);
+              setView('error');
             });
         }
       })
       .catch(() => {
         setError('Error al verificar la sesión');
-        setLoading(false);
+        setView('error');
       });
   };
 
-  // Mostrar información de la sesión si existe
-  if (sessionInfo) return (
+  // Volver a bienvenida y limpiar estados
+  const handleBack = () => {
+    setQr(null);
+    setError(null);
+    setLogoutMsg(null);
+    setAttempts(0);
+    setView('welcome');
+  };
+
+  // Cerrar sesión
+  const handleLogout = async () => {
+    setLogoutMsg(null);
+    try {
+      const res = await fetch('http://localhost:8080/logout', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setLogoutMsg(data.message);
+        setQr(null);
+        setError(null);
+        setSessionInfo(null);
+        setView('welcome');
+      } else {
+        setLogoutMsg(data.error || 'Error al cerrar sesión');
+      }
+    } catch (err) {
+      setLogoutMsg('Error de red al cerrar sesión');
+    }
+  };
+
+  // Renderizado por estado
+  if (view === 'loading') return (
+    <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto' }}>
+        <p style={{ color: '#202020', fontSize: '1.2em', marginBottom: '24px' }}><b>Cargando...</b></p>
+      </div>
+    </div>
+  );
+
+  if (view === 'session' && sessionInfo) return (
     <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto' }}>
         <h2 style={{ color: '#202020', marginBottom: '16px' }}>¡Ya tienes una sesión activa!</h2>
@@ -166,13 +173,14 @@ function QRLogin() {
         <p style={{ color: '#afafaf', fontSize: '1em', marginBottom: '16px' }}>
           Puedes entrar a la sesión activa para gestionar tus mensajes o cerrar la sesión si deseas vincular otra cuenta.
         </p>
-        <button onClick={() => alert('Entrando a la sesión activa...')} style={{ marginTop: '10px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer' }}>Entrar a la sesión</button>
-        <button onClick={handleLogout} style={{ marginTop: '20px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer', marginLeft: '10px' }}>Cerrar sesión</button>
+        <button onClick={() => alert('Entrando a la sesión activa...')} style={{ marginTop: '10px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer' }}>Entrar a la Sesión</button>
+        <button onClick={handleLogout} style={{ marginTop: '20px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer', marginLeft: '10px' }}>Cerrar Sesión</button>
+        {logoutMsg && <p>{logoutMsg}</p>}
       </div>
     </div>
   );
-  // Si no hay sesión, mostrar bienvenida
-  if (showWelcome) return (
+
+  if (view === 'welcome') return (
     <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <h2 style={{ color: '#fff' }}>¡Bienvenido a WhatsApp Usando WhatsMeow!</h2>
       <p style={{ color: '#afafaf', fontSize: '1em', maxWidth: '500px' }}>
@@ -182,38 +190,8 @@ function QRLogin() {
       <button onClick={handleStart} className="start-btn">Comenzar</button>
     </div>
   );
-  if (loading) return (
-    <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto' }}>
-        <p style={{ color: '#202020', fontSize: '1.2em', marginBottom: '24px' }}><b>Cargando QR...</b></p>
-        <p style={{ color: '#afafaf', fontSize: '1em', marginBottom: '16px' }}>Cuando aparezca el código QR, abre WhatsApp en tu teléfono, ve a <b>Menú &gt; Dispositivos vinculados</b> y escanea el código para conectar tu cuenta.</p>
-        <button onClick={handleBack} style={{ marginTop: '20px' }}>Volver</button>
-        {logoutMsg && <p>{logoutMsg}</p>}
-      </div>
-    </div>
-  );
-  if (error) return (
-    <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto' }}>
-        <p style={{ color: '#202020', fontSize: '1.2em', marginBottom: '24px' }}><b>Error:</b> {error}</p>
-        <button onClick={handleBack} style={{ marginTop: '20px', marginRight: '10px' }}>Volver</button>
-        <button onClick={() => { setError(null); setLoading(true); setQr(null); handleStart(); }} style={{ marginTop: '20px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer' }}>Actualizar QR</button>
-        {attempts >= 5 && <p style={{ color: '#d32f2f', marginTop: '16px' }}>¿Problemas? Intenta más tarde o revisa tu conexión.</p>}
-        {logoutMsg && <p>{logoutMsg}</p>}
-      </div>
-    </div>
-  );
-  if (!qr) return (
-    <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto' }}>
-        <p style={{ color: '#202020', fontSize: '1.2em', marginBottom: '24px' }}><b>No se recibió el QR.</b></p>
-        <button onClick={handleBack} style={{ marginTop: '20px' }}>Volver</button>
-        {logoutMsg && <p>{logoutMsg}</p>}
-      </div>
-    </div>
-  );
 
-  return (
+  if (view === 'qr' && qr) return (
     <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <h2 style={{ color: '#202020', marginBottom: '16px' }}>Escanea el QR para iniciar sesión</h2>
@@ -224,14 +202,25 @@ function QRLogin() {
           Abre WhatsApp en tu teléfono, ve a <b>Menú &gt; Dispositivos vinculados</b> y escanea el código QR para conectar tu cuenta.
         </p>
         <p style={{ color: '#25d366', fontWeight: 'bold', marginBottom: '8px' }}>El QR expira en: {qrTimer}s</p>
-        {qrTimer === 0 && (
-          <button onClick={() => { setError(null); setLoading(true); setQr(null); handleStart(); }} style={{ marginTop: '10px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer' }}>Actualizar QR</button>
-        )}
         <button onClick={handleBack} style={{ marginTop: '20px' }}>Volver</button>
+      </div>
+    </div>
+  );
+
+  if (view === 'error') return (
+    <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto' }}>
+        <p style={{ color: '#202020', fontSize: '1.2em', marginBottom: '24px' }}><b>Error:</b> {error}</p>
+        <button onClick={handleBack} style={{ marginTop: '20px', marginRight: '10px' }}>Volver</button>
+        <button onClick={() => { setError(null); setView('loading'); handleStart(); }} style={{ marginTop: '20px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer' }}>Actualizar QR</button>
+        {attempts >= 5 && <p style={{ color: '#d32f2f', marginTop: '16px' }}>¿Problemas? Intenta más tarde o revisa tu conexión.</p>}
         {logoutMsg && <p>{logoutMsg}</p>}
       </div>
     </div>
   );
+
+  return null;
 }
 
 export default QRLogin;
+

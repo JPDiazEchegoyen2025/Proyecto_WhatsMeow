@@ -16,7 +16,6 @@ import (
 )
 
 var (
-    waClient     *whatsmeow.Client
     waClientOnce sync.Once
     waClientErr  error
 )
