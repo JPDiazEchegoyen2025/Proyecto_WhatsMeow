@@ -1,3 +1,34 @@
+.start-btn:focus {
+  outline: none;
+}
+/* Botón Comenzar personalizado */
+.start-btn {
+  margin-top: 32px;
+  padding: 12px 32px;
+  font-size: 1.2em;
+  background: #25D366;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #eee;
+  transition: background 0.2s;
+}
+.start-btn:hover {
+  background: #039a79;
+}
+.start-btn:active {
+  background: #014d3c;
+}
+body {
+  background: #202020;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+}
+}
 #root {
   max-width: 1280px;
   margin: 0 auto;

@@ -4,7 +4,6 @@ package main
 
 import (
     "context"
-    "encoding/base64"
     "errors"
     "sync"
     "time"
@@ -54,14 +53,13 @@ func StartLogin() (string, error) {
     select {
     case evt := <-qrChan:
         if evt.Event == "code" {
-            qrBase64 := base64.StdEncoding.EncodeToString([]byte(evt.Code))
-            return qrBase64, nil
+            return evt.Code, nil
         } else if evt.Event == "timeout" {
             return "", errors.New("timeout esperando QR")
         } else if evt.Event == "success" {
             return "", errors.New("ya logueado")
         }
-    case <-time.After(15 * time.Second):
+    case <-time.After(60 * time.Second):
         return "", errors.New("timeout esperando QR")
     }
     return "", errors.New("no se pudo obtener el QR")
