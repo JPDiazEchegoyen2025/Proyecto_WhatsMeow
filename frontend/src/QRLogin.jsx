@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import QRCode from 'react-qr-code';
+import ChatPanel from './pages/ChatPanel';
 // QRLogin.jsx
 
 function QRLogin() {
@@ -161,22 +162,21 @@ function QRLogin() {
   );
 
   if (view === 'session' && sessionInfo) return (
-    <div style={{ textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 0 16px #222', maxWidth: '400px', margin: '0 auto' }}>
-        <h2 style={{ color: '#202020', marginBottom: '16px' }}>¡Ya tienes una sesión activa!</h2>
-        <p style={{ color: '#202020', fontSize: '1.1em', marginBottom: '16px' }}>
-          Tu cuenta está vinculada y lista para usar.<br /><br />
-          <b>Usuario:</b> {sessionInfo.user || 'Desconocido'}<br />
-          <b>Teléfono:</b> {sessionInfo.phone || 'Desconocido'}<br />
-          <b>Estado:</b> {sessionInfo.status || 'Activa'}
-        </p>
-        <p style={{ color: '#afafaf', fontSize: '1em', marginBottom: '16px' }}>
-          Puedes entrar a la sesión activa para gestionar tus mensajes o cerrar la sesión si deseas vincular otra cuenta.
-        </p>
-        <button onClick={() => alert('Entrando a la sesión activa...')} style={{ marginTop: '10px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer' }}>Entrar a la Sesión</button>
-        <button onClick={handleLogout} style={{ marginTop: '20px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer', marginLeft: '10px' }}>Cerrar Sesión</button>
-        {logoutMsg && <p>{logoutMsg}</p>}
-      </div>
+    <div style={{ width: '100%' }}>
+      <ChatPanel user={sessionInfo.user} onLogout={handleLogout} />
+      {/* Aquí puedes agregar el panel de chat o más contenido */}
+      {console.log('sessionInfo:', sessionInfo)}
+      {(logoutMsg || sessionInfo) && (
+        <div style={{ position: 'fixed', left: 0, bottom: 0, width: '100vw', background: '#202020', color: '#d32f2f', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0 3px 0', fontWeight: 'normal', fontSize: '0.95em', zIndex: 200, borderTop: '1px solid #888' }}>
+          <span style={{ marginLeft: 12, fontWeight: 'bold', letterSpacing: 1 }}>&gt; {logoutMsg || 'Sesión activa'}</span>
+          <span style={{ display: 'flex', alignItems: 'center', marginRight: 12 }}>
+            <span style={{ color: '#888', margin: '0 12px' }}>|</span>
+            <span style={{ marginRight: 18 }}>Móvil: <span style={{ color: '#fff' }}>{sessionInfo?.user ? `+${sessionInfo.user.replace(/:.*$/, '')}` : 'N/A'}</span></span>
+            <span style={{ color: '#888', margin: '0 12px' }}>|</span>
+            <span>Estado: <span style={{ color: '#25d366' }}>{sessionInfo?.active ? 'Activa' : 'Inactiva'}</span></span>
+          </span>
+        </div>
+      )}
     </div>
   );
 
@@ -214,8 +214,12 @@ function QRLogin() {
         <button onClick={handleBack} style={{ marginTop: '20px', marginRight: '10px' }}>Volver</button>
         <button onClick={() => { setError(null); setView('loading'); handleStart(); }} style={{ marginTop: '20px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 'bold', cursor: 'pointer' }}>Actualizar QR</button>
         {attempts >= 5 && <p style={{ color: '#d32f2f', marginTop: '16px' }}>¿Problemas? Intenta más tarde o revisa tu conexión.</p>}
-        {logoutMsg && <p>{logoutMsg}</p>}
       </div>
+      {logoutMsg && (
+        <div style={{ position: 'fixed', left: 0, bottom: 0, width: '100vw', background: '#25d366', color: '#fff', textAlign: 'center', padding: '12px 0', fontWeight: 'bold', fontSize: '1.1em', zIndex: 200 }}>
+          {logoutMsg}
+        </div>
+      )}
     </div>
   );
 
