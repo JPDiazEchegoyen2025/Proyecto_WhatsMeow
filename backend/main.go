@@ -1,17 +1,17 @@
 package main
 
 import (
-	"context"
-	"log"
-	"time"
+	   "context"
+	   "log"
+	   "time"
 
-	"github.com/gin-gonic/gin"
-	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/store"
-	"go.mau.fi/whatsmeow/store/sqlstore"
-	"go.mau.fi/whatsmeow/types/events"
-	waLog "go.mau.fi/whatsmeow/util/log"
-	_ "github.com/mattn/go-sqlite3"
+	   "github.com/gin-gonic/gin"
+	   "go.mau.fi/whatsmeow"
+	   "go.mau.fi/whatsmeow/store"
+	   "go.mau.fi/whatsmeow/store/sqlstore"
+	   "go.mau.fi/whatsmeow/types/events"
+	   waLog "go.mau.fi/whatsmeow/util/log"
+	   _ "github.com/mattn/go-sqlite3"
 )
 
 
@@ -169,11 +169,14 @@ func main() {
 		}
 	})
 
-	// Endpoint: ping
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "pong"})
-	})
+	   // Endpoint: contactos WhatsApp
+	   r.GET("/contacts", ContactsHandler)
 
-	log.Println("🚀 Backend WhatsApp listo en :8080")
-	r.Run() // por defecto en :8080
+	   // Endpoint: ping
+	   r.GET("/ping", func(c *gin.Context) {
+			   c.JSON(200, gin.H{"message": "pong"})
+	   })
+
+	   log.Println("🚀 Backend WhatsApp listo en :8080")
+	   r.Run() // por defecto en :8080
 }

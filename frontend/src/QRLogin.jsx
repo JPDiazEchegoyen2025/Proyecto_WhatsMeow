@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import QRCode from 'react-qr-code';
 import ChatPanel from './pages/ChatPanel';
+import ContactsPanel from './pages/ContactsPanel'; // Asegúrate de tener este componente
 // QRLogin.jsx
 
 function QRLogin() {
@@ -12,14 +13,26 @@ function QRLogin() {
   const [error, setError] = useState(null);
   const [logoutMsg, setLogoutMsg] = useState(null);
   const [attempts, setAttempts] = useState(0);
+  const [contacts, setContacts] = useState([]);
+  const [searchValue, setSearchValue] = useState('');
+  const [activeContactId, setActiveContactId] = useState(null);
   const qrIntervalRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const [notification, setNotification] = useState("");
+  // Limpia la notificación después de 3 segundos
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(""), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   // Verificar sesión activa al cargar
   useEffect(() => {
     fetch('http://localhost:8080/session')
       .then((res) => res.json())
       .then((data) => {
+        setNotification('GET /session: Sesión verificada');
         if (data && data.active) {
           setSessionInfo(data);
           setView('session');
@@ -29,6 +42,7 @@ function QRLogin() {
         }
       })
       .catch(() => {
+        setNotification('GET /session: Error al verificar sesión');
         setSessionInfo(null);
         setView('welcome');
       });
@@ -91,17 +105,21 @@ function QRLogin() {
   // Iniciar proceso de vinculación
   const handleStart = () => {
     setView('loading');
+    setNotification('GET /session: Verificando sesión...');
     fetch('http://localhost:8080/session')
       .then((res) => res.json())
       .then((data) => {
+        setNotification('GET /session: Sesión verificada');
         if (data && data.active) {
           setSessionInfo(data);
           setView('session');
         } else {
+          setNotification('GET /login: Solicitando QR...');
           fetch('http://localhost:8080/login')
             .then((response) => {
               if (!response.ok) {
                 setAttempts((prev) => prev + 1);
+                setNotification('GET /login: Error al obtener QR');
                 throw new Error('Error al obtener el QR');
               }
               return response.json();
@@ -110,6 +128,7 @@ function QRLogin() {
               setQr(data.qr);
               setAttempts(0);
               setView('qr');
+              setNotification('GET /login: QR recibido');
             })
             .catch((err) => {
               setError(err.message);
@@ -118,6 +137,7 @@ function QRLogin() {
         }
       })
       .catch(() => {
+        setNotification('GET /session: Error al verificar sesión');
         setError('Error al verificar la sesión');
         setView('error');
       });
@@ -135,6 +155,7 @@ function QRLogin() {
   // Cerrar sesión
   const handleLogout = async () => {
     setLogoutMsg(null);
+    setNotification('POST /logout: Cerrando sesión...');
     try {
       const res = await fetch('http://localhost:8080/logout', { method: 'POST' });
       const data = await res.json();
@@ -144,13 +165,33 @@ function QRLogin() {
         setError(null);
         setSessionInfo(null);
         setView('welcome');
+        setNotification('POST /logout: Sesión cerrada');
       } else {
         setLogoutMsg(data.error || 'Error al cerrar sesión');
+        setNotification('POST /logout: Error al cerrar sesión');
       }
     } catch (err) {
       setLogoutMsg('Error de red al cerrar sesión');
+      setNotification('POST /logout: Error de red');
     }
   };
+
+  // Fetch contactos al cargar sesión
+  useEffect(() => {
+    if (view === 'session' && sessionInfo) {
+      setNotification('GET /contacts: Cargando contactos...');
+      fetch('http://localhost:8080/contacts')
+        .then(res => res.json())
+        .then(data => {
+          setContacts(data);
+          setNotification('GET /contacts: Contactos actualizados');
+        })
+        .catch(() => {
+          setContacts([]);
+          setNotification('GET /contacts: Error al cargar contactos');
+        });
+    }
+  }, [view, sessionInfo]);
 
   // Renderizado por estado
   if (view === 'loading') return (
@@ -162,13 +203,26 @@ function QRLogin() {
   );
 
   if (view === 'session' && sessionInfo) return (
-    <div style={{ width: '100%' }}>
-      <ChatPanel user={sessionInfo.user} onLogout={handleLogout} />
-      {/* Aquí puedes agregar el panel de chat o más contenido */}
-      {console.log('sessionInfo:', sessionInfo)}
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', background: '#f0f0f0' }}>
+      {/* Columna izquierda: contactos */}
+      <ContactsPanel
+        contacts={contacts}
+        activeContactId={activeContactId}
+        onSelectContact={contact => setActiveContactId(contact.id)}
+        searchValue={searchValue}
+        onSearchChange={setSearchValue}
+      />
+      {/* Área principal del chat */}
+      <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        <ChatPanel user={sessionInfo.user} onLogout={handleLogout} />
+        {/* Aquí irá el área de chat con el contacto seleccionado */}
+      </div>
+      {/* Barra de notificaciones restaurada */}
       {(logoutMsg || sessionInfo) && (
         <div style={{ position: 'fixed', left: 0, bottom: 0, width: '100vw', background: '#202020', color: '#d32f2f', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0 3px 0', fontWeight: 'normal', fontSize: '0.95em', zIndex: 200, borderTop: '1px solid #888' }}>
-          <span style={{ marginLeft: 12, fontWeight: 'bold', letterSpacing: 1 }}>&gt; {logoutMsg || 'Sesión activa'}</span>
+          <span style={{ marginLeft: 12, fontWeight: 'bold', letterSpacing: 1 }}>
+            {notification ? notification : (logoutMsg || 'Sesión activa')}
+          </span>
           <span style={{ display: 'flex', alignItems: 'center', marginRight: 12 }}>
             <span style={{ color: '#888', margin: '0 12px' }}>|</span>
             <span style={{ marginRight: 18 }}>Móvil: <span style={{ color: '#fff' }}>{sessionInfo?.user ? `+${sessionInfo.user.replace(/:.*$/, '')}` : 'N/A'}</span></span>
